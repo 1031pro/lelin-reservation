@@ -1,6 +1,6 @@
 window.RESERVATION_CONFIG = {
   GAS_WEBAPP_URL: 'https://script.google.com/macros/s/AKfycbyNx1TJBKp0FRg7zXfs50d3cohPY00dO26ei3-z-fDi1fULuHxOaHrXUEr_3B6Bz3BcpQ/exec',
-  LIFF_ID: '',
+  LIFF_ID: '2011783575-2iqzhXcG',
 
   STORE_NAME: 'eyelash Lelin（ルラン）',
   STORE_PHONE: '0276613520',
