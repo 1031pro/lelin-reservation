@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <script>
+    // Hide transitional pages, but let LIFF consume the original URL before routing.
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var mode = params.get('mode');
+      if (!mode && params.get('liff.state')) {
+        try {
+          var state = decodeURIComponent(params.get('liff.state'));
+          var start = state.indexOf('?');
+          mode = new URLSearchParams(start >= 0 ? state.slice(start + 1) : state.replace(/^\?/, '')).get('mode');
+        } catch (error) { /* Leave malformed launches to the existing application. */ }
+      }
+      var authReturn = params.has('liff.state') || params.has('code') || params.has('liffClientId');
+      var manage = mode === 'manage';
+      try {
+        var saved = JSON.parse(sessionStorage.getItem('reservationManagementLaunch') || 'null');
+        if (!mode && authReturn && saved && Date.now() - saved.at < 600000 && Date.now() >= saved.at) manage = true;
+        if (manage) sessionStorage.setItem('reservationManagementLaunch', JSON.stringify({at:Date.now()}));
+        else if (!authReturn) sessionStorage.removeItem('reservationManagementLaunch');
+      } catch (error) { /* Storage can be unavailable; URL routing remains usable. */ }
+      window.reservationLaunch = {manage:manage, authReturn:authReturn};
+      if (manage || authReturn) {
+        document.documentElement.style.visibility = 'hidden';
+      }
+    })();
+  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>LINE予約</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=20260829-1">
+  <script src="config.js?v=20260907-1"></script>
+</head>
+<body>
+  <main class="phone">
+    <header class="topbar">
+      <div class="topbar__title">
+        <strong data-config="STORE_NAME">店舗名</strong>
+        <span data-config="HEADER_SUBTITLE">予約受付</span>
+      </div>
+      <button class="topbar__close" type="button" aria-label="閉じる" data-action="close">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 7l10 10M17 7L7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </header>
+
+
+    <section class="screen is-active" data-screen="home">
+      <div class="content">
+        <article class="hero">
+          <div class="hero__visual">
+            <svg class="hero__icon" viewBox="0 0 48 48" fill="none" aria-hidden="true">
+              <rect x="7" y="10" width="34" height="31" rx="7" stroke="currentColor" stroke-width="3"/>
+              <path d="M7 19h34M16 6v8M32 6v8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              <path d="m17 30 5 5 10-11" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <h1>ご予約</h1>
+          </div>
+          <div class="hero__body">
+            <ul class="service-card">
+              <li>
+                <span>予約内容</span>
+                <strong data-config="SERVICE_NAME">サービス名</strong>
+              </li>
+              <li>
+                <span>所要時間</span>
+                <strong data-config="SERVICE_DURATION_LABEL">60分</strong>
+              </li>
+            </ul>
+            <p class="important-notice" data-config="RESERVATION_NOTICE">
+              変更、キャンセルはお電話またはLINEでお願いします。
+            </p>
+          </div>
+        </article>
+        <section class="menu-section" id="menuSection" hidden>
+          <h2>ご希望のメニュー</h2>
+          <div class="menu-list" id="menuList"></div>
+        </section>
+      </div>
+      <div class="fixed-action">
+        <button class="primary" type="button" data-action="start" id="startButton">空き時間を見る</button>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="loading">
+      <div class="loading" role="status" aria-live="polite">
+        <div>
+          <div class="spinner"></div>
+          <h2>空き時間を確認しています</h2>
+          <p>現在受付できる日時を読み込んでいます</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="slots">
+      <div class="content">
+        <div class="step" aria-label="予約ステップ">
+          <div class="step__item is-current"><span class="step__dot">1</span><span>日時</span></div>
+          <div class="step__item"><span class="step__dot">2</span><span>入力</span></div>
+          <div class="step__item"><span class="step__dot">3</span><span>完了</span></div>
+        </div>
+
+        <button class="text-button" type="button" data-action="home">戻る</button>
+        <h2 class="page-title">ご来店日時をお選びください</h2>
+
+        <div class="week-nav" aria-label="表示期間の切り替え">
+          <button class="week-nav__button" type="button" data-action="prevWeek" id="prevWeekButton">前の週</button>
+          <div class="week-nav__range" id="weekRange">表示期間</div>
+          <button class="week-nav__button" type="button" data-action="nextWeek" id="nextWeekButton">次の週</button>
+        </div>
+
+        <div class="week-loading" id="weekLoading" role="status" aria-live="polite" hidden>
+          <span class="mini-spinner"></span>
+          <span>空き時間を読み込んでいます</span>
+        </div>
+
+        <section class="availability-card" aria-label="空き状況一覧">
+          <div class="availability-card__head">
+            <div>
+              <strong id="slotHeading">直近1週間の空き時間</strong>
+              <span>ご都合のよい○をタップしてください</span>
+            </div>
+            <div class="availability-legend">
+              <div>○ 空き</div>
+              <div>× 予約不可</div>
+            </div>
+          </div>
+          <div class="availability-grid" id="availabilityGrid"></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="form">
+      <div class="content">
+        <div class="step" aria-label="予約ステップ">
+          <div class="step__item is-done"><span class="step__dot">1</span><span>日時</span></div>
+          <div class="step__item is-current"><span class="step__dot">2</span><span>入力</span></div>
+          <div class="step__item"><span class="step__dot">3</span><span>完了</span></div>
+        </div>
+
+        <h2 class="page-title">お客様情報の入力</h2>
+
+        <form class="form-card" id="reservationForm" novalidate>
+          <div class="selected">
+            <div>
+              <span>選択日時</span>
+              <strong id="selectedDateTime">未選択</strong>
+              <em id="selectedMenuName"></em>
+            </div>
+            <button class="text-button" type="button" data-action="backToSlots">変更</button>
+          </div>
+
+          <div class="fields">
+            <div class="field">
+              <label for="guestName">お名前</label>
+              <input id="guestName" name="guestName" type="text" autocomplete="name" placeholder="お名前" maxlength="100" required>
+              <small id="savedNameHint">初回のみお名前をご入力ください。次回から同じLINEアカウントで再利用できます。お名前はいつでも修正できます。</small>
+            </div>
+          </div>
+
+          <div class="confirming" id="submitLoading" role="status" aria-live="polite">
+            <span class="mini-spinner"></span>
+            <span>選択した日時の空きを確認しています</span>
+          </div>
+          <p class="important-notice important-notice--form" data-config="RESERVATION_NOTICE">
+            変更、キャンセルはお電話またはLINEでお願いします。
+          </p>
+        </form>
+      </div>
+      <div class="fixed-action">
+        <button class="primary" type="submit" form="reservationForm" id="submitButton">予約を確定する</button>
+      </div>
+    </section>
+
+    <section class="screen" data-screen="complete">
+      <div class="content">
+        <div class="step" aria-label="予約ステップ">
+          <div class="step__item is-done"><span class="step__dot">1</span><span>日時</span></div>
+          <div class="step__item is-done"><span class="step__dot">2</span><span>入力</span></div>
+          <div class="step__item is-current"><span class="step__dot">3</span><span>完了</span></div>
+        </div>
+
+        <article class="complete-card">
+          <div class="complete-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5 12.5l4.2 4.2L19.5 6.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h2 id="completeHeading">ご予約ありがとうございます</h2>
+          <dl class="complete-summary">
+            <div id="completeReservationRow">
+              <dt>予約番号</dt>
+              <dd id="completeReservationId">-</dd>
+            </div>
+            <div>
+              <dt>日時</dt>
+              <dd id="completeDateTime">未選択</dd>
+            </div>
+            <div>
+              <dt>お名前</dt>
+              <dd id="completeName">未入力</dd>
+            </div>
+          </dl>
+        </article>
+        <p class="contact-note">変更、キャンセルはお電話またはLINEでお願いします。<br><a href="tel:0276613520">0276613520</a></p>
+      </div>
+      <div class="fixed-action">
+        <button class="secondary" type="button" data-action="restart">別の日時を予約する</button>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="alert"></div>
+  <script src="api-client.js?v=20260907-errors"></script>
+  <script src="time-utils.js?v=20260827-1"></script>
+  <script src="app.js?v=20260909-slot-display"></script>
+</body>
+</html>
