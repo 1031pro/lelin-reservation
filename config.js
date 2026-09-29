@@ -1,5 +1,5 @@
 window.RESERVATION_CONFIG = {
-  GAS_WEBAPP_URL: '',
+  GAS_WEBAPP_URL: 'https://script.google.com/macros/s/AKfycbyNx1TJBKp0FRg7zXfs50d3cohPY00dO26ei3-z-fDi1fULuHxOaHrXUEr_3B6Bz3BcpQ/exec',
   LIFF_ID: '',
 
   STORE_NAME: 'eyelash Lelin（ルラン）',
